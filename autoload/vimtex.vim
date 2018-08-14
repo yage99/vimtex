@@ -172,13 +172,6 @@ function! vimtex#init_options() " {{{1
         \ { 'lhs' : 'vr', 'rhs' : '\varrho' },
         \])
 
-  call s:init_option('vimtex_index_mode', 1)
-  call s:init_option('vimtex_index_hide_line_numbers', 1)
-  call s:init_option('vimtex_index_resize', 0)
-  call s:init_option('vimtex_index_show_help', 1)
-  call s:init_option('vimtex_index_split_pos', 'vert leftabove')
-  call s:init_option('vimtex_index_split_width', 30)
-
   call s:init_option('vimtex_mappings_enabled', 1)
   call s:init_option('vimtex_mappings_disable', {})
 
@@ -201,14 +194,38 @@ function! vimtex#init_options() " {{{1
   call s:init_option('vimtex_text_obj_linewise_operators', ['d', 'y'])
 
   call s:init_option('vimtex_toc_enabled', 1)
+  call s:init_option('vimtex_toc_mode', 1)
+  call s:init_option('vimtex_toc_hide_line_numbers', 1)
+  call s:init_option('vimtex_toc_resize', 0)
+  call s:init_option('vimtex_toc_split_pos', 'vert leftabove')
+  call s:init_option('vimtex_toc_split_width', 30)
   call s:init_option('vimtex_toc_custom_matchers', [])
-  call s:init_option('vimtex_toc_fold', 0)
   call s:init_option('vimtex_toc_refresh_always', 1)
   call s:init_option('vimtex_toc_tocdepth', 3)
+  call s:init_option('vimtex_toc_fold', 0)
   call s:init_option('vimtex_toc_fold_level_start', g:vimtex_toc_tocdepth)
+  call s:init_option('vimtex_toc_show_help', 1)
   call s:init_option('vimtex_toc_show_numbers', 1)
   call s:init_option('vimtex_toc_show_preamble', 1)
   call s:init_option('vimtex_toc_hotkeys', {})
+  call s:init_option('vimtex_toc_layers', {
+        \ 'content': {
+        \   'key': '<c-c>',
+        \   'active': 1,
+        \ },
+        \ 'label': {
+        \   'key': '<c-l>',
+        \   'active': 1,
+        \ },
+        \ 'todo': {
+        \   'key': '<c-t>',
+        \   'active': 1,
+        \ },
+        \ 'include': {
+        \   'key': '<c-i>',
+        \   'active': 1,
+        \ },
+        \})
 
   call s:init_option('vimtex_view_enabled', 1)
   call s:init_option('vimtex_view_automatic', 1)
@@ -255,6 +272,8 @@ function! s:init_option(option, default) " {{{1
   let l:option = 'g:' . a:option
   if !exists(l:option)
     let {l:option} = a:default
+  elseif type(a:default) == type({})
+    call extend({l:option}, a:default, 'keep')
   endif
 endfunction
 
@@ -265,8 +284,6 @@ function! s:init_highlights() " {{{1
         \ ['VimtexImapsLhs', 'ModeMsg'],
         \ ['VimtexImapsRhs', 'ModeMsg'],
         \ ['VimtexImapsWrapper', 'Type'],
-        \ ['VimtexIndexHelp', 'helpVim'],
-        \ ['VimtexIndexLine', 'ModeMsg'],
         \ ['VimtexInfo', 'Question'],
         \ ['VimtexInfoTitle', 'PreProc'],
         \ ['VimtexInfoKey', 'Statement'],
@@ -282,6 +299,9 @@ function! s:init_highlights() " {{{1
         \ ['VimtexMsg', 'ModeMsg'],
         \ ['VimtexSuccess', 'Statement'],
         \ ['VimtexTocHelp', 'helpVim'],
+        \ ['VimtexTocHelpKey', 'ModeMsg'],
+        \ ['VimtexTocHelpLayerOn', 'Title'],
+        \ ['VimtexTocHelpLayerOff', 'Comment'],
         \ ['VimtexTocTodo', 'Todo'],
         \ ['VimtexTocNum', 'Number'],
         \ ['VimtexTocSec0', 'Title'],

@@ -18,7 +18,7 @@ endfunction
 function! vimtex#toc#init_state(state) abort " {{{1
   if !g:vimtex_toc_enabled | return | endif
 
-  let a:state.toc = vimtex#index#new(s:toc.new())
+  let a:state.toc = deepcopy(s:toc)
 endfunction
 
 " }}}1
@@ -26,13 +26,13 @@ endfunction
 function! vimtex#toc#get_entries() abort " {{{1
   if !has_key(b:vimtex, 'toc') | return [] | endif
 
-  return b:vimtex.toc.update(0)
+  return b:vimtex.toc.get_entries(0)
 endfunction
 
 " }}}1
 function! vimtex#toc#refresh() abort " {{{1
   if has_key(b:vimtex, 'toc')
-    call b:vimtex.toc.update(1)
+    call b:vimtex.toc.get_entries(1)
   endif
 endfunction
 
@@ -40,40 +40,99 @@ endfunction
 
 let s:toc = {
       \ 'name' : 'Table of contents (vimtex)',
-      \ 'help' : [
-      \   '-:       decrease g:vimtex_toc_tocdepth',
-      \   '+:       increase g:vimtex_toc_tocdepth',
-      \   'c:       clear filters',
-      \   'f:       filter',
-      \   's:       hide numbering',
-      \   't:       toggle sorted TODOs',
-      \   'u:       update',
-      \ ],
+      \ 'types' : g:vimtex_toc_layers,
+      \ 'show_help' : g:vimtex_toc_show_help,
       \ 'show_numbers' : g:vimtex_toc_show_numbers,
       \ 'tocdepth' : g:vimtex_toc_tocdepth,
+      \ 'hotkeys' : extend({
+      \     'enabled' : '0',
+      \     'leader' : ';',
+      \     'keys' : 'abcdeghijklmnopuvxyz',
+      \   }, g:vimtex_toc_hotkeys),
       \ 'todo_sorted' : 1,
       \}
 
-function! s:toc.new() abort dict " {{{1
-  let l:toc = deepcopy(self)
+"
+" Open and close TOC window
+"
+function! s:toc.open() abort dict " {{{1
+  if self.is_open() | return | endif
 
-  let l:toc.hotkeys = extend({
-        \ 'enabled' : '0',
-        \ 'leader' : ';',
-        \ 'keys' : 'abdeghijklmnoprvxyz',
-        \}, g:vimtex_toc_hotkeys)
+  let self.calling_file = expand('%:p')
+  let self.calling_line = line('.')
 
-  unlet l:toc.new
-  return l:toc
+  call self.get_entries(0)
+
+  if g:vimtex_toc_mode > 1
+    call setloclist(0, map(deepcopy(self.entries), '{
+          \ ''lnum'': v:val.line,
+          \ ''filename'': v:val.file,
+          \ ''text'': v:val.title,
+          \}'))
+    try
+      call setloclist(0, [], 'r', {'title': self.name})
+    catch
+    endtry
+    if g:vimtex_toc_mode == 4 | lopen | endif
+  endif
+
+  if g:vimtex_toc_mode < 3
+    call self.create()
+  endif
 endfunction
 
 " }}}1
-function! s:toc.update(force) abort dict " {{{1
+function! s:toc.is_open() abort dict " {{{1
+  return bufwinnr(bufnr(self.name)) >= 0
+endfunction
+
+" }}}1
+function! s:toc.toggle() abort dict " {{{1
+  if self.is_open()
+    call self.close()
+  else
+    call self.open()
+    if has_key(self, 'prev_winid')
+      call win_gotoid(self.prev_winid)
+    endif
+  endif
+endfunction
+
+" }}}1
+function! s:toc.close() abort dict " {{{1
+  let self.fold_level = &l:foldlevel
+
+  if g:vimtex_toc_resize
+    silent exe 'set columns -=' . g:vimtex_toc_split_width
+  endif
+
+  if g:vimtex_toc_split_pos ==# 'full'
+    silent execute 'buffer' self.prev_bufnr
+  else
+    silent execute 'bwipeout' bufnr(self.name)
+  endif
+endfunction
+
+" }}}1
+function! s:toc.goto() abort dict " {{{1
+  if self.is_open()
+    let l:prev_winid = win_getid()
+    silent execute bufwinnr(bufnr(self.name)) . 'wincmd w'
+    let b:toc.prev_winid = l:prev_winid
+  endif
+endfunction
+
+" }}}1
+
+"
+" Get the TOC entries
+"
+function! s:toc.get_entries(force) abort dict " {{{1
   if has_key(self, 'entries') && !g:vimtex_toc_refresh_always && !a:force
     return self.entries
   endif
 
-  let self.entries = vimtex#parser#toc(b:vimtex.tex, {'types': ['content', 'todo']})
+  let self.entries = vimtex#parser#toc(b:vimtex.tex)
   let self.topmatters = vimtex#parser#toc#get_topmatters()
 
   "
@@ -106,6 +165,18 @@ function! s:toc.update(force) abort dict " {{{1
   endif
 
   "
+  " Parse types
+  "
+  for entry in self.entries
+    let entry.active = self.types[entry.type].active
+  endfor
+
+  "
+  " Update help text
+  "
+  call self.set_help()
+
+  "
   " Refresh if wanted
   "
   if a:force && self.is_open()
@@ -117,29 +188,92 @@ endfunction
 
 " }}}1
 
-function! s:toc.hook_init_post() abort dict " {{{1
+"
+" Creating, refreshing and filling the buffer
+"
+function! s:toc.create() abort dict " {{{1
+  let l:bufnr = bufnr('')
+  let l:winid = win_getid()
+  let l:vimtex = get(b:, 'vimtex', {})
+
+  if g:vimtex_toc_split_pos ==# 'full'
+    silent execute 'edit' escape(self.name, ' ')
+  else
+    if g:vimtex_toc_resize
+      silent exe 'set columns +=' . g:vimtex_toc_split_width
+    endif
+    silent execute
+          \ g:vimtex_toc_split_pos g:vimtex_toc_split_width
+          \ 'new' escape(self.name, ' ')
+  endif
+
+  let self.prev_bufnr = l:bufnr
+  let self.prev_winid = l:winid
+  let b:toc = self
+  let b:vimtex = l:vimtex
+
+  setlocal bufhidden=wipe
+  setlocal buftype=nofile
+  setlocal concealcursor=nvic
+  setlocal conceallevel=2
+  setlocal cursorline
+  setlocal nobuflisted
+  setlocal nolist
+  setlocal nospell
+  setlocal noswapfile
+  setlocal nowrap
+  setlocal tabstop=8
+
+  if g:vimtex_toc_hide_line_numbers
+    setlocal nonumber
+    setlocal norelativenumber
+  endif
+
+  call self.set_syntax()
+  call self.refresh()
+
   if g:vimtex_toc_fold
     let self.foldexpr = function('s:foldexpr')
     let self.foldtext  = function('s:foldtext')
     setlocal foldmethod=expr
-    setlocal foldexpr=b:index.foldexpr(v:lnum)
-    setlocal foldtext=b:index.foldtext()
+    setlocal foldexpr=b:toc.foldexpr(v:lnum)
+    setlocal foldtext=b:toc.foldtext()
     let &l:foldlevel = get(self, 'fold_level', g:vimtex_toc_fold_level_start)
   endif
 
-  nnoremap <buffer><nowait><silent> f :call b:index.filter()<cr>
-  nnoremap <buffer><nowait><silent> F :call b:index.clear_filter()<cr>
-  nnoremap <buffer><nowait><silent> s :call b:index.toggle_numbers()<cr>
-  nnoremap <buffer><nowait><silent> t :call b:index.toggle_sorted_todos()<cr>
-  nnoremap <buffer><nowait><silent> u :call b:index.update(1)<cr>
-  nnoremap <buffer><nowait><silent> - :call b:index.decrease_depth()<cr>
-  nnoremap <buffer><nowait><silent> + :call b:index.increase_depth()<cr>
+  if b:toc.show_help
+    nnoremap <silent><nowait><buffer> gg gg}j
+  endif
+
+  nnoremap <silent><nowait><buffer> <esc>OA k
+  nnoremap <silent><nowait><buffer> <esc>OB j
+  nnoremap <silent><nowait><buffer> <esc>OC k
+  nnoremap <silent><nowait><buffer> <esc>OD j
+  nnoremap <silent><nowait><buffer> q             :call b:toc.close()<cr>
+  nnoremap <silent><nowait><buffer> <esc>         :call b:toc.close()<cr>
+  nnoremap <silent><nowait><buffer> <space>       :call b:toc.activate(0)<cr>
+  nnoremap <silent><nowait><buffer> <2-leftmouse> :call b:toc.activate(0)<cr>
+  nnoremap <silent><nowait><buffer> <cr>          :call b:toc.activate(1)<cr>
+  nnoremap <buffer><nowait><silent> f             :call b:toc.filter()<cr>
+  nnoremap <buffer><nowait><silent> F             :call b:toc.clear_filter()<cr>
+  nnoremap <buffer><nowait><silent> s             :call b:toc.toggle_numbers()<cr>
+  nnoremap <buffer><nowait><silent> t             :call b:toc.toggle_sorted_todos()<cr>
+  nnoremap <buffer><nowait><silent> r             :call b:toc.get_entries(1)<cr>
+  nnoremap <buffer><nowait><silent> -             :call b:toc.decrease_depth()<cr>
+  nnoremap <buffer><nowait><silent> +             :call b:toc.increase_depth()<cr>
+
+  for [type, cfg] in items(self.types)
+    execute printf(
+          \ 'nnoremap <buffer><nowait><silent> %s'
+          \ . ' :call b:toc.toggle_type(''%s'')<cr>',
+          \ cfg.key, type)
+  endfor
 
   if self.hotkeys.enabled
     for entry in self.entries
       execute printf(
             \ 'nnoremap <buffer><nowait><silent> %s%s'
-            \ . ' :call b:index.activate_number(%d)<cr>',
+            \ . ' :call b:toc.activate_number(%d)<cr>',
             \ self.hotkeys.leader, entry.hotkey, entry.num)
     endfor
   endif
@@ -149,36 +283,96 @@ function! s:toc.hook_init_post() abort dict " {{{1
 endfunction
 
 " }}}1
-function! s:toc.get_closest_index() abort dict " {{{1
-  let l:calling_rank = 0
-  let l:not_found = 1
-  for [l:file, l:lnum, l:line] in vimtex#parser#tex(b:vimtex.tex)
-    let l:calling_rank += 1
-    if l:file ==# self.calling_file && l:lnum >= self.calling_line
-      let l:not_found = 0
-      break
-    endif
-  endfor
+function! s:toc.refresh() abort dict " {{{1
+  let l:toc_winnr = bufwinnr(bufnr(self.name))
+  let l:buf_winnr = bufwinnr(bufnr(''))
 
-  if l:not_found
-    return [0, get(self, 'prev_index', self.help_nlines + 1), 0, 0]
+  if l:toc_winnr < 0
+    return
+  elseif l:buf_winnr != l:toc_winnr
+    silent execute l:toc_winnr . 'wincmd w'
   endif
 
-  let l:index = 0
-  let l:dist = 0
-  let l:closest_index = 1
-  let l:closest_dist = 10000
-  for l:entry in self.entries
-    let l:index += 1
-    let l:dist = l:calling_rank - entry.rank
+  call self.position_save()
+  setlocal modifiable
+  silent %delete
 
-    if l:dist >= 0 && l:dist < l:closest_dist
-      let l:closest_dist = l:dist
-      let l:closest_index = l:index
+  call self.print_help()
+  call self.print_entries()
+
+  0delete _
+  setlocal nomodifiable
+  call self.position_restore()
+
+  if l:buf_winnr != l:toc_winnr
+    silent execute l:buf_winnr . 'wincmd w'
+  endif
+endfunction
+
+" }}}1
+function! s:toc.set_syntax() abort dict "{{{1
+  syntax match VimtexTocHelp /^;;\s*$/
+  syntax match VimtexTocHelp /^;; \w*.*  / nextgroup=VimtexTocHelpKey
+  syntax match VimtexTocHelp /^;; Toggle keys/ nextgroup=VimtexTocHelpKey
+  syntax match VimtexTocHelpKey /.*/ contained
+
+  syntax match VimtexTocHelp /^;; Layer/
+        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
+  syntax match VimtexTocHelpLayerOn /\s*\w*+/ contained
+        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
+        \ contains=VimtexTocHelpConceal
+  syntax match VimtexTocHelpLayerOff /\s*\w*-/ contained
+        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
+        \ contains=VimtexTocHelpConceal
+  syntax match VimtexTocHelpConceal /[+-]/ contained conceal
+
+  syntax match VimtexTocNum /\v^(([A-Z]+>|\d+)(\.\d+)*)?\s*/ contained
+  syntax match VimtexTocTodo /\s\zsTODO: / contained
+  syntax match VimtexTocHotkey /\[[^]]\+\]/ contained
+  syntax match VimtexTocTag
+        \ /^\[.\]/ contained
+
+  highlight link VimtexTocHelpLayer VimtexTocHelp
+  highlight link VimtexTocHelp1 VimtexTocHelp
+  highlight link VimtexTocHelp2 VimtexTocHelp
+  highlight link VimtexTocHelp3 VimtexTocHelp
+
+  syntax match VimtexTocSec0 /^.*0$/ contains=@VimtexTocStuff
+  syntax match VimtexTocSec1 /^.*1$/ contains=@VimtexTocStuff
+  syntax match VimtexTocSec2 /^.*2$/ contains=@VimtexTocStuff
+  syntax match VimtexTocSec3 /^.*3$/ contains=@VimtexTocStuff
+  syntax match VimtexTocSec4 /^.*4$/ contains=@VimtexTocStuff
+
+  syntax cluster VimtexTocStuff
+        \ contains=VimtexTocNum,VimtexTocTag,VimtexTocHotkey,VimtexTocTodo,@Tex
+
+  syntax match VimtexLabelsChap /^chap:.*$/ contains=@Tex
+  syntax match VimtexLabelsEq   /^eq:.*$/   contains=@Tex
+  syntax match VimtexLabelsFig  /^fig:.*$/  contains=@Tex
+  syntax match VimtexLabelsSec  /^sec:.*$/  contains=@Tex
+  syntax match VimtexLabelsTab  /^tab:.*$/  contains=@Tex
+endfunction
+
+" }}}1
+
+"
+" Print the TOC entries
+"
+function! s:toc.print_help() abort dict " {{{1
+  let self.help_nlines = 0
+  if self.show_help
+    call append('$', ';; Close                                    <Esc>/q')
+    call append('$', ';; Jump                                     <Space>')
+    call append('$', ';; Jump and close                           <Enter>')
+    if has_key(self, 'help')
+      for helpstring in self.help
+        call append('$', helpstring)
+      endfor
+      let self.help_nlines += len(self.help)
     endif
-  endfor
-
-  return [0, l:closest_index + self.help_nlines, 0, 0]
+    call append('$', '')
+    let self.help_nlines += 4
+  endif
 endfunction
 
 " }}}1
@@ -187,7 +381,7 @@ function! s:toc.print_entries() abort dict " {{{1
   let self.number_format = '%-' . self.number_width . 's'
 
   for entry in self.entries
-    if !get(entry, 'hidden')
+    if get(entry, 'active', 1) && !get(entry, 'hidden')
       call self.print_entry(entry)
     endif
   endfor
@@ -249,34 +443,77 @@ function! s:toc.print_number(number) abort dict " {{{1
 endfunction
 
 " }}}1
-function! s:toc.decrease_depth() abort dict "{{{1
-  let self.tocdepth = max([self.tocdepth - 1, -2])
-  call self.refresh()
+
+"
+" Interactions with TOC buffer/window
+"
+function! s:toc.activate_number(n) abort dict "{{{1
+  execute printf('normal! %dG', self.help_nlines + a:n)
+  call self.activate(1)
 endfunction
 
 " }}}1
-function! s:toc.increase_depth() abort dict "{{{1
-  let self.tocdepth = min([self.tocdepth + 1, 5])
-  call self.refresh()
-endfunction
+function! s:toc.activate(close) abort dict "{{{1
+  let n = vimtex#pos#get_cursor_line() - 1
+  if n < self.help_nlines | return | endif
+  let entry = self.entries[n - self.help_nlines]
+  let self.prev_index = n + 1
+  let l:vimtex_main = get(b:vimtex, 'tex', '')
 
-" }}}1
-function! s:toc.syntax() abort dict "{{{1
-  syntax match VimtexTocHelp /^\S.*: .*/
-  syntax match VimtexTocNum /\v^(([A-Z]+>|\d+)(\.\d+)*)?\s*/ contained
-  syntax match VimtexTocTodo /\s\zsTODO: / contained
-  syntax match VimtexTocHotkey /\[[^]]\+\]/ contained
-  syntax match VimtexTocTag
-        \ /^\[.\]/ contained
+  " Save toc winnr info for later use
+  let toc_winnr = winnr()
 
-  syntax match VimtexTocSec0 /^.*0$/ contains=@VimtexTocStuff
-  syntax match VimtexTocSec1 /^.*1$/ contains=@VimtexTocStuff
-  syntax match VimtexTocSec2 /^.*2$/ contains=@VimtexTocStuff
-  syntax match VimtexTocSec3 /^.*3$/ contains=@VimtexTocStuff
-  syntax match VimtexTocSec4 /^.*4$/ contains=@VimtexTocStuff
+  " Return to calling window
+  call win_gotoid(self.prev_winid)
 
-  syntax cluster VimtexTocStuff
-        \ contains=VimtexTocNum,VimtexTocTag,VimtexTocHotkey,VimtexTocTodo,@Tex
+  " Get buffer number, add buffer if necessary
+  let bnr = bufnr(entry.file)
+  if bnr == -1
+    execute 'badd ' . fnameescape(entry.file)
+    let bnr = bufnr(entry.file)
+  endif
+
+  " Set bufferopen command
+  "   The point here is to use existing open buffer if the user has turned on
+  "   the &switchbuf option to either 'useopen' or 'usetab'
+  let cmd = 'buffer! '
+  if &switchbuf =~# 'usetab'
+    for i in range(tabpagenr('$'))
+      if index(tabpagebuflist(i + 1), bnr) >= 0
+        let cmd = 'sbuffer! '
+        break
+      endif
+    endfor
+  elseif &switchbuf =~# 'useopen'
+    if bufwinnr(bnr) > 0
+      let cmd = 'sbuffer! '
+    endif
+  endif
+
+  " Open file buffer
+  execute 'keepalt' cmd bnr
+
+  " Go to entry line
+  if has_key(entry, 'line')
+    call vimtex#pos#set_cursor(entry.line, 0)
+  endif
+
+  " If relevant, enable vimtex stuff
+  if get(entry, 'link', 0) && !empty(l:vimtex_main)
+    let b:vimtex_main = l:vimtex_main
+    call vimtex#init()
+  endif
+
+  " Ensure folds are opened
+  normal! zv
+
+  " Keep or close toc window (based on options)
+  if a:close && g:vimtex_toc_split_pos !=# 'full'
+    call self.close()
+  else
+    " Return to toc window
+    execute toc_winnr . 'wincmd w'
+  endif
 endfunction
 
 " }}}1
@@ -288,21 +525,31 @@ endfunction
 " }}}1
 function! s:toc.toggle_sorted_todos() abort dict "{{{1
   let self.todo_sorted = self.todo_sorted ? 0 : 1
-  call self.update(1)
+  call self.get_entries(1)
   call vimtex#pos#set_cursor(self.get_closest_index())
 endfunction
 
 " }}}1
-function! s:toc.activate_number(n) abort dict "{{{1
-  execute printf('normal! %dG', self.help_nlines + a:n)
-  call self.activate(1)
+function! s:toc.toggle_type(type) abort dict "{{{1
+  let self.types[a:type].active = !self.types[a:type].active
+  for entry in self.entries
+    if entry.type ==# a:type
+      let entry.active = self.types[a:type].active
+    endif
+  endfor
+  call self.set_help()
+  call self.refresh()
 endfunction
 
 " }}}1
-function! s:toc.clear_filter() dict "{{{1
-  for entry in self.entries
-    let entry.hidden = 0
-  endfor
+function! s:toc.decrease_depth() abort dict "{{{1
+  let self.tocdepth = max([self.tocdepth - 1, -2])
+  call self.refresh()
+endfunction
+
+" }}}1
+function! s:toc.increase_depth() abort dict "{{{1
+  let self.tocdepth = min([self.tocdepth + 1, 5])
   call self.refresh()
 endfunction
 
@@ -316,6 +563,88 @@ function! s:toc.filter() dict "{{{1
 endfunction
 
 " }}}1
+function! s:toc.clear_filter() dict "{{{1
+  for entry in self.entries
+    let entry.hidden = 0
+  endfor
+  call self.refresh()
+endfunction
+
+" }}}1
+
+"
+" Utility functions
+"
+function! s:toc.set_help() abort dict "{{{1
+  let l:line1 = ';; Layer        '
+  let l:line2 = ';; Toggle keys  '
+  let l:frmt1 = '%-10s'
+  let l:frmt2 = '%-9s'
+  for [type, cfg] in items(self.types)
+    let l:line1 .= printf(l:frmt1, type . (cfg.active ? '+' : '-'))
+    let l:line2 .= printf(l:frmt2, cfg.key)
+  endfor
+
+  let self.help = [
+        \ ';; Decrease/increase g:vimtex_toc_tocdepth  -/+',
+        \ ';; Apply/clear filter                       f/F',
+        \ ';; Hide numbering                           s',
+        \ ';; Toggle sorted TODOs                      t',
+        \ ';; Refresh                                  r',
+        \ ';;',
+        \ l:line1,
+        \ l:line2
+        \]
+endfunction
+
+" }}}1
+function! s:toc.get_closest_index() abort dict " {{{1
+  let l:calling_rank = 0
+  let l:not_found = 1
+  for [l:file, l:lnum, l:line] in vimtex#parser#tex(b:vimtex.tex)
+    let l:calling_rank += 1
+    if l:file ==# self.calling_file && l:lnum >= self.calling_line
+      let l:not_found = 0
+      break
+    endif
+  endfor
+
+  if l:not_found
+    return [0, get(self, 'prev_index', self.help_nlines + 1), 0, 0]
+  endif
+
+  let l:index = 0
+  let l:dist = 0
+  let l:closest_index = 1
+  let l:closest_dist = 10000
+  for l:entry in self.entries
+    let l:index += 1
+    let l:dist = l:calling_rank - entry.rank
+
+    if l:dist >= 0 && l:dist < l:closest_dist
+      let l:closest_dist = l:dist
+      let l:closest_index = l:index
+    endif
+  endfor
+
+  return [0, l:closest_index + self.help_nlines, 0, 0]
+endfunction
+
+" }}}1
+function! s:toc.position_save() abort dict " {{{1
+  let self.position = vimtex#pos#get_cursor()
+endfunction
+
+" }}}1
+function! s:toc.position_restore() abort dict " {{{1
+  if self.position[1] <= self.help_nlines
+    let self.position[1] = self.help_nlines + 1
+  endif
+  call vimtex#pos#set_cursor(self.position)
+endfunction
+
+" }}}1
+
 
 function! s:foldexpr(lnum) abort " {{{1
   let pline = getline(a:lnum - 1)
@@ -345,7 +674,7 @@ endfunction
 function! s:foldtext() abort " {{{1
   let l:line = getline(v:foldstart)
 
-  if b:index.todo_sorted && l:line =~# 'TODO:'
+  if b:toc.todo_sorted && l:line =~# 'TODO:'
     return substitute(l:line, 'TODO\zs:.*', 's', '')
   else
     return l:line
