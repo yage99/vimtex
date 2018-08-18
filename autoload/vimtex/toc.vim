@@ -47,7 +47,7 @@ let s:toc = {
       \ 'hotkeys' : extend({
       \     'enabled' : '0',
       \     'leader' : ';',
-      \     'keys' : 'abcdeghijklmnopuvxyz',
+      \     'keys' : 'abcdegijklmnopuvxyz',
       \   }, g:vimtex_toc_hotkeys),
       \ 'todo_sorted' : 1,
       \}
@@ -236,7 +236,7 @@ function! s:toc.create() abort dict " {{{1
     let &l:foldlevel = get(self, 'fold_level', g:vimtex_toc_fold_level_start)
   endif
 
-  nnoremap <silent><nowait><buffer><expr> gg b:toc.show_help ? 'gg}j' : 'gg'
+  nnoremap <silent><nowait><buffer><expr> gg b:toc.show_help ? 'gg}}j' : 'gg'
   nnoremap <silent><nowait><buffer> <esc>OA k
   nnoremap <silent><nowait><buffer> <esc>OB j
   nnoremap <silent><nowait><buffer> <esc>OC k
