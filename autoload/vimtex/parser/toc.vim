@@ -349,13 +349,15 @@ let s:matcher_bibliography = {
       \}
 
 let s:matcher_todos = {
-      \ 're' : g:vimtex#re#not_bslash . '\%\c\s*todo\s*:?\s*\zs.*',
+      \ 're' : g:vimtex#re#not_bslash . '\%\c\s*('
+      \   . join(g:vimtex_toc_todo_keywords, '|') . ')\s*:?\s*(.*)',
       \ 'in_preamble' : 1,
       \}
 function! s:matcher_todos.get_entry(context) abort dict " {{{1
+  let [l:type, l:text] = matchlist(a:context.line, self.re)[1:2]
   return {
-        \ 'title'  : printf('TODO: %s', matchstr(a:context.line, self.re)),
-        \ 'number' : deepcopy(a:context.level),
+        \ 'title'  : toupper(l:type) . ': ' . l:text,
+        \ 'number' : '',
         \ 'file'   : a:context.file,
         \ 'line'   : a:context.lnum,
         \ 'level'  : a:context.max_level - a:context.level.current,
