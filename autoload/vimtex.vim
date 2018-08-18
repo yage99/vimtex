@@ -300,7 +300,7 @@ function! s:init_highlights() " {{{1
         \ ['VimtexSuccess', 'Statement'],
         \ ['VimtexTocHelp', 'helpVim'],
         \ ['VimtexTocHelpKey', 'ModeMsg'],
-        \ ['VimtexTocHelpLayerOn', 'Title'],
+        \ ['VimtexTocHelpLayerOn', 'Statement'],
         \ ['VimtexTocHelpLayerOff', 'Comment'],
         \ ['VimtexTocTodo', 'Todo'],
         \ ['VimtexTocNum', 'Number'],

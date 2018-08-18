@@ -172,11 +172,6 @@ function! s:toc.get_entries(force) abort dict " {{{1
   endfor
 
   "
-  " Update help text
-  "
-  call self.set_help()
-
-  "
   " Refresh if wanted
   "
   if a:force && self.is_open()
@@ -229,8 +224,8 @@ function! s:toc.create() abort dict " {{{1
     setlocal norelativenumber
   endif
 
-  call self.set_syntax()
   call self.refresh()
+  call self.set_syntax()
 
   if g:vimtex_toc_fold
     let self.foldexpr = function('s:foldexpr')
@@ -241,10 +236,7 @@ function! s:toc.create() abort dict " {{{1
     let &l:foldlevel = get(self, 'fold_level', g:vimtex_toc_fold_level_start)
   endif
 
-  if b:toc.show_help
-    nnoremap <silent><nowait><buffer> gg gg}j
-  endif
-
+  nnoremap <silent><nowait><buffer><expr> gg b:toc.show_help ? 'gg}j' : 'gg'
   nnoremap <silent><nowait><buffer> <esc>OA k
   nnoremap <silent><nowait><buffer> <esc>OB j
   nnoremap <silent><nowait><buffer> <esc>OC k
@@ -254,6 +246,7 @@ function! s:toc.create() abort dict " {{{1
   nnoremap <silent><nowait><buffer> <space>       :call b:toc.activate(0)<cr>
   nnoremap <silent><nowait><buffer> <2-leftmouse> :call b:toc.activate(0)<cr>
   nnoremap <silent><nowait><buffer> <cr>          :call b:toc.activate(1)<cr>
+  nnoremap <buffer><nowait><silent> h             :call b:toc.toggle_help()<cr>
   nnoremap <buffer><nowait><silent> f             :call b:toc.filter()<cr>
   nnoremap <buffer><nowait><silent> F             :call b:toc.clear_filter()<cr>
   nnoremap <buffer><nowait><silent> s             :call b:toc.toggle_numbers()<cr>
@@ -311,31 +304,32 @@ endfunction
 
 " }}}1
 function! s:toc.set_syntax() abort dict "{{{1
-  syntax match VimtexTocHelp /^;;\s*$/
-  syntax match VimtexTocHelp /^;; \w*.*  / nextgroup=VimtexTocHelpKey
-  syntax match VimtexTocHelp /^;; Toggle keys/ nextgroup=VimtexTocHelpKey
-  syntax match VimtexTocHelpKey /.*/ contained
+  syntax clear
 
-  syntax match VimtexTocHelp /^;; Layer/
-        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
-  syntax match VimtexTocHelpLayerOn /\s*\w*+/ contained
-        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
-        \ contains=VimtexTocHelpConceal
-  syntax match VimtexTocHelpLayerOff /\s*\w*-/ contained
-        \ nextgroup=VimtexTocHelpLayerOn,VimtexTocHelpLayerOff
-        \ contains=VimtexTocHelpConceal
-  syntax match VimtexTocHelpConceal /[+-]/ contained conceal
+  if self.show_help
+    execute 'syntax match VimtexTocHelp'
+          \ '/^\%<' . self.help_nlines . 'l.*/'
+          \ 'contains=VimtexTocHelpKey,VimtexTocHelpLayerOn,VimtexTocHelpLayerOff'
+
+    syntax match VimtexTocHelpKey /<\S*>/ contained
+    syntax match VimtexTocHelpKey /^\s*[-+<>a-zA-Z\/]\+\ze\s/ contained
+          \ contains=VimtexTocHelpKeySeparator
+    syntax match VimtexTocHelpKeySeparator /\// contained
+
+    syntax match VimtexTocHelpLayerOn /\w\++/ contained
+          \ contains=VimtexTocHelpConceal
+    syntax match VimtexTocHelpLayerOff /\w\+-/ contained
+          \ contains=VimtexTocHelpConceal
+    syntax match VimtexTocHelpConceal /[+-]/ contained conceal
+
+    highlight link VimtexTocHelpKeySeparator VimtexTocHelp
+  endif
 
   syntax match VimtexTocNum /\v^(([A-Z]+>|\d+)(\.\d+)*)?\s*/ contained
   syntax match VimtexTocTodo /\s\zsTODO: / contained
   syntax match VimtexTocHotkey /\[[^]]\+\]/ contained
   syntax match VimtexTocTag
         \ /^\[.\]/ contained
-
-  highlight link VimtexTocHelpLayer VimtexTocHelp
-  highlight link VimtexTocHelp1 VimtexTocHelp
-  highlight link VimtexTocHelp2 VimtexTocHelp
-  highlight link VimtexTocHelp3 VimtexTocHelp
 
   syntax match VimtexTocSec0 /^.*0$/ contains=@VimtexTocStuff
   syntax match VimtexTocSec1 /^.*1$/ contains=@VimtexTocStuff
@@ -360,19 +354,34 @@ endfunction
 "
 function! s:toc.print_help() abort dict " {{{1
   let self.help_nlines = 0
-  if self.show_help
-    call append('$', ';; Close                                    <Esc>/q')
-    call append('$', ';; Jump                                     <Space>')
-    call append('$', ';; Jump and close                           <Enter>')
-    if has_key(self, 'help')
-      for helpstring in self.help
-        call append('$', helpstring)
-      endfor
-      let self.help_nlines += len(self.help)
-    endif
-    call append('$', '')
-    let self.help_nlines += 4
-  endif
+  if !self.show_help | return | endif
+
+  let l:layer_title = 'Layers:  '
+  let l:layer_keys =  '         '
+  for [type, cfg] in items(self.types)
+    let l:layer_title .= printf('%-10s', type . (cfg.active ? '+' : '-'))
+    let l:layer_keys .= printf('%-9s', cfg.key)
+  endfor
+
+  let help_text = [
+        \ '<Esc>/q  Close',
+        \ '<Space>  Jump',
+        \ '<Enter>  Jump and close',
+        \ '      r  Refresh',
+        \ '      s  Hide numbering',
+        \ '      h  Toggle help text',
+        \ '      t  Toggle sorted TODOs',
+        \ '    -/+  Decrease/increase g:vimtex_toc_tocdepth',
+        \ '    f/F  Apply/clear filter',
+        \ '',
+        \ l:layer_title,
+        \ l:layer_keys,
+        \]
+
+  call append('$', help_text)
+  call append('$', '')
+
+  let self.help_nlines += len(help_text) + 1
 endfunction
 
 " }}}1
@@ -517,6 +526,24 @@ function! s:toc.activate(close) abort dict "{{{1
 endfunction
 
 " }}}1
+function! s:toc.toggle_help() abort dict "{{{1
+  let l:pos = vimtex#pos#get_cursor()
+  if self.show_help
+    let l:pos[1] -= self.help_nlines
+    call vimtex#pos#set_cursor(l:pos)
+  endif
+
+  let self.show_help = self.show_help ? 0 : 1
+  call self.refresh()
+  call self.set_syntax()
+
+  if self.show_help
+    let l:pos[1] += self.help_nlines
+    call vimtex#pos#set_cursor(l:pos)
+  endif
+endfunction
+
+" }}}1
 function! s:toc.toggle_numbers() abort dict "{{{1
   let self.show_numbers = self.show_numbers ? 0 : 1
   call self.refresh()
@@ -537,7 +564,6 @@ function! s:toc.toggle_type(type) abort dict "{{{1
       let entry.active = self.types[a:type].active
     endif
   endfor
-  call self.set_help()
   call self.refresh()
 endfunction
 
@@ -575,29 +601,6 @@ endfunction
 "
 " Utility functions
 "
-function! s:toc.set_help() abort dict "{{{1
-  let l:line1 = ';; Layer        '
-  let l:line2 = ';; Toggle keys  '
-  let l:frmt1 = '%-10s'
-  let l:frmt2 = '%-9s'
-  for [type, cfg] in items(self.types)
-    let l:line1 .= printf(l:frmt1, type . (cfg.active ? '+' : '-'))
-    let l:line2 .= printf(l:frmt2, cfg.key)
-  endfor
-
-  let self.help = [
-        \ ';; Decrease/increase g:vimtex_toc_tocdepth  -/+',
-        \ ';; Apply/clear filter                       f/F',
-        \ ';; Hide numbering                           s',
-        \ ';; Toggle sorted TODOs                      t',
-        \ ';; Refresh                                  r',
-        \ ';;',
-        \ l:line1,
-        \ l:line2
-        \]
-endfunction
-
-" }}}1
 function! s:toc.get_closest_index() abort dict " {{{1
   let l:calling_rank = 0
   let l:not_found = 1
