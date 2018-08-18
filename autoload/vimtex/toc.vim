@@ -243,9 +243,9 @@ function! s:toc.create() abort dict " {{{1
   nnoremap <silent><nowait><buffer> <esc>OD j
   nnoremap <silent><nowait><buffer> q             :call b:toc.close()<cr>
   nnoremap <silent><nowait><buffer> <esc>         :call b:toc.close()<cr>
-  nnoremap <silent><nowait><buffer> <space>       :call b:toc.activate(0)<cr>
-  nnoremap <silent><nowait><buffer> <2-leftmouse> :call b:toc.activate(0)<cr>
-  nnoremap <silent><nowait><buffer> <cr>          :call b:toc.activate(1)<cr>
+  nnoremap <silent><nowait><buffer> <space>       :call b:toc.activate_current(0)<cr>
+  nnoremap <silent><nowait><buffer> <2-leftmouse> :call b:toc.activate_current(0)<cr>
+  nnoremap <silent><nowait><buffer> <cr>          :call b:toc.activate_current(1)<cr>
   nnoremap <buffer><nowait><silent> h             :call b:toc.toggle_help()<cr>
   nnoremap <buffer><nowait><silent> f             :call b:toc.filter()<cr>
   nnoremap <buffer><nowait><silent> F             :call b:toc.clear_filter()<cr>
@@ -266,8 +266,8 @@ function! s:toc.create() abort dict " {{{1
     for entry in self.entries
       execute printf(
             \ 'nnoremap <buffer><nowait><silent> %s%s'
-            \ . ' :call b:toc.activate_number(%d)<cr>',
-            \ self.hotkeys.leader, entry.hotkey, entry.num)
+            \ . ' :call b:toc.activate_hotkey(''%s'')<cr>',
+            \ self.hotkeys.leader, entry.hotkey, entry.hotkey)
     endfor
   endif
 
@@ -456,17 +456,37 @@ endfunction
 "
 " Interactions with TOC buffer/window
 "
-function! s:toc.activate_number(n) abort dict "{{{1
-  execute printf('normal! %dG', self.help_nlines + a:n)
-  call self.activate(1)
+function! s:toc.activate_current(close_after) abort dict "{{{1
+  let n = vimtex#pos#get_cursor_line() - 1
+  if n < self.help_nlines | return {} | endif
+
+  let l:count = 0
+  for l:entry in self.entries
+    if get(l:entry, 'active', 1) && !get(l:entry, 'hidden')
+      if l:count == n - self.help_nlines
+        return self.activate_entry(l:entry, a:close_after)
+      endif
+      let l:count += 1
+    endif
+  endfor
+
+  return {}
 endfunction
 
 " }}}1
-function! s:toc.activate(close) abort dict "{{{1
-  let n = vimtex#pos#get_cursor_line() - 1
-  if n < self.help_nlines | return | endif
-  let entry = self.entries[n - self.help_nlines]
-  let self.prev_index = n + 1
+function! s:toc.activate_hotkey(key) abort dict "{{{1
+  for entry in self.entries
+    if entry.hotkey ==# a:key
+      return self.activate_entry(entry, 1)
+    endif
+  endfor
+
+  return {}
+endfunction
+
+" }}}1
+function! s:toc.activate_entry(entry, close_after) abort dict "{{{1
+  let self.prev_index = vimtex#pos#get_cursor_line()
   let l:vimtex_main = get(b:vimtex, 'tex', '')
 
   " Save toc winnr info for later use
@@ -476,10 +496,10 @@ function! s:toc.activate(close) abort dict "{{{1
   call win_gotoid(self.prev_winid)
 
   " Get buffer number, add buffer if necessary
-  let bnr = bufnr(entry.file)
+  let bnr = bufnr(a:entry.file)
   if bnr == -1
-    execute 'badd ' . fnameescape(entry.file)
-    let bnr = bufnr(entry.file)
+    execute 'badd ' . fnameescape(a:entry.file)
+    let bnr = bufnr(a:entry.file)
   endif
 
   " Set bufferopen command
@@ -503,12 +523,12 @@ function! s:toc.activate(close) abort dict "{{{1
   execute 'keepalt' cmd bnr
 
   " Go to entry line
-  if has_key(entry, 'line')
-    call vimtex#pos#set_cursor(entry.line, 0)
+  if has_key(a:entry, 'line')
+    call vimtex#pos#set_cursor(a:entry.line, 0)
   endif
 
   " If relevant, enable vimtex stuff
-  if get(entry, 'link', 0) && !empty(l:vimtex_main)
+  if get(a:entry, 'link', 0) && !empty(l:vimtex_main)
     let b:vimtex_main = l:vimtex_main
     call vimtex#init()
   endif
@@ -517,7 +537,7 @@ function! s:toc.activate(close) abort dict "{{{1
   normal! zv
 
   " Keep or close toc window (based on options)
-  if a:close && g:vimtex_toc_split_pos !=# 'full'
+  if a:close_after && g:vimtex_toc_split_pos !=# 'full'
     call self.close()
   else
     " Return to toc window
@@ -621,12 +641,14 @@ function! s:toc.get_closest_index() abort dict " {{{1
   let l:closest_index = 1
   let l:closest_dist = 10000
   for l:entry in self.entries
-    let l:index += 1
-    let l:dist = l:calling_rank - entry.rank
+    if get(l:entry, 'active', 1) && !get(l:entry, 'hidden')
+      let l:index += 1
+      let l:dist = l:calling_rank - entry.rank
 
-    if l:dist >= 0 && l:dist < l:closest_dist
-      let l:closest_dist = l:dist
-      let l:closest_index = l:index
+      if l:dist >= 0 && l:dist < l:closest_dist
+        let l:closest_dist = l:dist
+        let l:closest_index = l:index
+      endif
     endif
   endfor
 
