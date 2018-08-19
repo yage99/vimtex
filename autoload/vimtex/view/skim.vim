@@ -11,12 +11,6 @@ function! vimtex#view#skim#new() " {{{1
         \ '''tell application "Finder" to POSIX path of ',
         \ '(get application file id (id of application "Skim") as alias)''',
         \])
-<<<<<<< HEAD
-  
-  " disable skim check
-=======
-
->>>>>>> 36cd8be5e3bcc5465bfbb52e2de3c0d99b1d12d1
   if system(l:cmd)
     call vimtex#log#error('Skim is not installed!')
     return {}
