@@ -18,22 +18,70 @@ function! vimtex#motion#init_buffer() " {{{1
   onoremap <silent><buffer> <plug>(vimtex-%) :execute "normal \<sid>(v)\<sid>(vimtex-%)"<cr>
 
   " Sections
-  nnoremap <silent><buffer> <plug>(vimtex-]]) :<c-u>call vimtex#motion#next_section(0,0,0)<cr>
-  nnoremap <silent><buffer> <plug>(vimtex-][) :<c-u>call vimtex#motion#next_section(1,0,0)<cr>
-  nnoremap <silent><buffer> <plug>(vimtex-[]) :<c-u>call vimtex#motion#next_section(1,1,0)<cr>
-  nnoremap <silent><buffer> <plug>(vimtex-[[) :<c-u>call vimtex#motion#next_section(0,1,0)<cr>
-  xnoremap <silent><buffer>  <sid>(vimtex-]]) :<c-u>call vimtex#motion#next_section(0,0,1)<cr>
-  xnoremap <silent><buffer>  <sid>(vimtex-][) :<c-u>call vimtex#motion#next_section(1,0,1)<cr>
-  xnoremap <silent><buffer>  <sid>(vimtex-[]) :<c-u>call vimtex#motion#next_section(1,1,1)<cr>
-  xnoremap <silent><buffer>  <sid>(vimtex-[[) :<c-u>call vimtex#motion#next_section(0,1,1)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-]]) :<c-u>call vimtex#motion#section(0,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-][) :<c-u>call vimtex#motion#section(1,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[]) :<c-u>call vimtex#motion#section(1,1,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[[) :<c-u>call vimtex#motion#section(0,1,0)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-]]) :<c-u>call vimtex#motion#section(0,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-][) :<c-u>call vimtex#motion#section(1,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[]) :<c-u>call vimtex#motion#section(1,1,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[[) :<c-u>call vimtex#motion#section(0,1,1)<cr>
   xmap     <silent><buffer> <plug>(vimtex-]]) <sid>(vimtex-]])
   xmap     <silent><buffer> <plug>(vimtex-][) <sid>(vimtex-][)
   xmap     <silent><buffer> <plug>(vimtex-[]) <sid>(vimtex-[])
   xmap     <silent><buffer> <plug>(vimtex-[[) <sid>(vimtex-[[)
-  onoremap <silent><buffer> <plug>(vimtex-]]) :execute "normal \<sid>(V)\<sid>(vimtex-]])"<cr>
-  onoremap <silent><buffer> <plug>(vimtex-][) :execute "normal \<sid>(V)\<sid>(vimtex-][)"<cr>
-  onoremap <silent><buffer> <plug>(vimtex-[]) :execute "normal \<sid>(V)\<sid>(vimtex-[])"<cr>
-  onoremap <silent><buffer> <plug>(vimtex-[[) :execute "normal \<sid>(V)\<sid>(vimtex-[[)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-]])
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-]])"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-][)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-][)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[])
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[])"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[[)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[[)"<cr>
+
+  " Environments
+  nnoremap <silent><buffer> <plug>(vimtex-]m) :<c-u>call vimtex#motion#environment(1,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-]M) :<c-u>call vimtex#motion#environment(0,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[m) :<c-u>call vimtex#motion#environment(1,1,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[M) :<c-u>call vimtex#motion#environment(0,1,0)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-]m) :<c-u>call vimtex#motion#environment(1,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-]M) :<c-u>call vimtex#motion#environment(0,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[m) :<c-u>call vimtex#motion#environment(1,1,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[M) :<c-u>call vimtex#motion#environment(0,1,1)<cr>
+  xmap     <silent><buffer> <plug>(vimtex-]m) <sid>(vimtex-]m)
+  xmap     <silent><buffer> <plug>(vimtex-]M) <sid>(vimtex-]M)
+  xmap     <silent><buffer> <plug>(vimtex-[m) <sid>(vimtex-[m)
+  xmap     <silent><buffer> <plug>(vimtex-[M) <sid>(vimtex-[M)
+  onoremap <silent><buffer> <plug>(vimtex-]m)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-]m)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-]M)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-]M)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[m)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[m)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[M)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[M)"<cr>
+
+  " Comments
+  nnoremap <silent><buffer> <plug>(vimtex-]/) :<c-u>call vimtex#motion#comment(1,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-]*) :<c-u>call vimtex#motion#comment(0,0,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[/) :<c-u>call vimtex#motion#comment(1,1,0)<cr>
+  nnoremap <silent><buffer> <plug>(vimtex-[*) :<c-u>call vimtex#motion#comment(0,1,0)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-]/) :<c-u>call vimtex#motion#comment(1,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-]*) :<c-u>call vimtex#motion#comment(0,0,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[/) :<c-u>call vimtex#motion#comment(1,1,1)<cr>
+  xnoremap <silent><buffer>  <sid>(vimtex-[*) :<c-u>call vimtex#motion#comment(0,1,1)<cr>
+  xmap     <silent><buffer> <plug>(vimtex-]/) <sid>(vimtex-]/)
+  xmap     <silent><buffer> <plug>(vimtex-]*) <sid>(vimtex-]*)
+  xmap     <silent><buffer> <plug>(vimtex-[/) <sid>(vimtex-[/)
+  xmap     <silent><buffer> <plug>(vimtex-[*) <sid>(vimtex-[*)
+  onoremap <silent><buffer> <plug>(vimtex-]/)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-]/)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-]*)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-]*)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[/)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[/)"<cr>
+  onoremap <silent><buffer> <plug>(vimtex-[*)
+        \ :execute "normal \<sid>(V)" . v:count1 . "\<sid>(vimtex-[*)"<cr>
 endfunction
 
 " }}}1
@@ -61,7 +109,7 @@ function! vimtex#motion#find_matching_pair(...) " {{{1
 endfunction
 
 " }}}1
-function! vimtex#motion#next_paragraph(backwards, visual) " {{{1
+function! vimtex#motion#paragraph(backwards, visual) " {{{1
   if a:visual
     normal! gv
   endif
@@ -96,8 +144,8 @@ function! vimtex#motion#next_paragraph(backwards, visual) " {{{1
 endfunction
 
 " }}}1
-function! vimtex#motion#next_section(type, backwards, visual) " {{{1
-  " Restore visual mode if desired
+function! vimtex#motion#section(type, backwards, visual) " {{{1
+  let l:count = v:count1
   if a:visual
     normal! gv
   endif
@@ -118,7 +166,7 @@ function! vimtex#motion#next_section(type, backwards, visual) " {{{1
     let l:flags .= 'b'
   endif
 
-  for l:_ in range(v:count1)
+  for l:_ in range(l:count)
     let l:save_pos = vimtex#pos#get_cursor()
 
     if a:type == 1
@@ -145,6 +193,39 @@ function! vimtex#motion#next_section(type, backwards, visual) " {{{1
         call vimtex#pos#set_cursor([1, 1])
       endif
     endif
+  endfor
+endfunction
+
+" }}}1
+function! vimtex#motion#environment(begin, backwards, visual) " {{{1
+  let l:count = v:count1
+  if a:visual
+    normal! gv
+  endif
+
+  let l:re = g:vimtex#re#not_comment . (a:begin ? '\\begin\s*\{' : '\\end\s*\{')
+  let l:flags = 'W' . (a:backwards ? 'b' : '')
+
+  for l:_ in range(l:count)
+    call search(l:re, l:flags)
+  endfor
+endfunction
+
+" }}}1
+function! vimtex#motion#comment(begin, backwards, visual) " {{{1
+  let l:count = v:count1
+  if a:visual
+    normal! gv
+  endif
+
+  let l:re = a:begin
+        \ ? '\v%(^\s*\%.*\n)@<!\s*\%'
+        \ : '\v^\s*\%.*\n%(^\s*\%)@!'
+  let l:flags = 'W' . (a:backwards ? 'b' : '')
+  echo l:re l:flags
+
+  for l:_ in range(l:count)
+    call search(l:re, l:flags)
   endfor
 endfunction
 

@@ -29,6 +29,8 @@ function! vimtex#init_options() " {{{1
   call s:init_option('vimtex_compiler_progname',
         \ get(v:, 'progpath', get(v:, 'progname')))
   call s:init_option('vimtex_compiler_callback_hooks', [])
+  call s:init_option('vimtex_compiler_latexmk_engines', {})
+  call s:init_option('vimtex_compiler_latexrun_engines', {})
 
   call s:init_option('vimtex_complete_enabled', 1)
   call s:init_option('vimtex_complete_close_braces', 0)
@@ -193,6 +195,8 @@ function! vimtex#init_options() " {{{1
   call s:init_option('vimtex_quickfix_open_on_warning', '1')
   call s:init_option('vimtex_quickfix_blgparser', {})
 
+  call s:init_option('vimtex_texcount_custom_arg', '')
+
   call s:init_option('vimtex_text_obj_enabled', 1)
   call s:init_option('vimtex_text_obj_linewise_operators', ['d', 'y'])
 
@@ -219,6 +223,8 @@ function! vimtex#init_options() " {{{1
   call s:init_option('vimtex_view_general_options_latexmk', '')
   call s:init_option('vimtex_view_mupdf_options', '')
   call s:init_option('vimtex_view_mupdf_send_keys', '')
+  call s:init_option('vimtex_view_skim_activate', 0)
+  call s:init_option('vimtex_view_skim_reading_bar', 1)
   call s:init_option('vimtex_view_zathura_options', '')
 endfunction
 
@@ -331,7 +337,7 @@ function! s:init_buffer() " {{{1
   setlocal commentstring=%%s
   setlocal iskeyword+=:
   setlocal includeexpr=vimtex#include#expr()
-  let &l:include = g:vimtex#re#tex_input
+  let &l:include = g:vimtex#re#tex_include
   let &l:define  = '\\\([egx]\|char\|mathchar\|count\|dimen\|muskip\|skip'
   let &l:define .= '\|toks\)\=def\|\\font\|\\\(future\)\=let'
   let &l:define .= '\|\\new\(count\|dimen\|skip'
@@ -417,6 +423,11 @@ function! s:init_default_mappings() " {{{1
   endif
 
   if get(g:, 'vimtex_motion_enabled', 0)
+    " These are forced in order to overwrite matchit mappings
+    call s:map('n', '%', '<plug>(vimtex-%)', 1)
+    call s:map('x', '%', '<plug>(vimtex-%)', 1)
+    call s:map('o', '%', '<plug>(vimtex-%)', 1)
+
     call s:map('n', ']]', '<plug>(vimtex-]])')
     call s:map('n', '][', '<plug>(vimtex-][)')
     call s:map('n', '[]', '<plug>(vimtex-[])')
@@ -430,10 +441,31 @@ function! s:init_default_mappings() " {{{1
     call s:map('o', '[]', '<plug>(vimtex-[])')
     call s:map('o', '[[', '<plug>(vimtex-[[)')
 
-    " These are forced in order to overwrite matchit mappings
-    call s:map('n', '%', '<plug>(vimtex-%)', 1)
-    call s:map('x', '%', '<plug>(vimtex-%)', 1)
-    call s:map('o', '%', '<plug>(vimtex-%)', 1)
+    call s:map('n', ']M', '<plug>(vimtex-]M)')
+    call s:map('n', ']m', '<plug>(vimtex-]m)')
+    call s:map('n', '[M', '<plug>(vimtex-[M)')
+    call s:map('n', '[m', '<plug>(vimtex-[m)')
+    call s:map('x', ']M', '<plug>(vimtex-]M)')
+    call s:map('x', ']m', '<plug>(vimtex-]m)')
+    call s:map('x', '[M', '<plug>(vimtex-[M)')
+    call s:map('x', '[m', '<plug>(vimtex-[m)')
+    call s:map('o', ']M', '<plug>(vimtex-]M)')
+    call s:map('o', ']m', '<plug>(vimtex-]m)')
+    call s:map('o', '[M', '<plug>(vimtex-[M)')
+    call s:map('o', '[m', '<plug>(vimtex-[m)')
+
+    call s:map('n', ']/', '<plug>(vimtex-]/)')
+    call s:map('n', ']*', '<plug>(vimtex-]*)')
+    call s:map('n', '[/', '<plug>(vimtex-[/)')
+    call s:map('n', '[*', '<plug>(vimtex-[*)')
+    call s:map('x', ']/', '<plug>(vimtex-]/)')
+    call s:map('x', ']*', '<plug>(vimtex-]*)')
+    call s:map('x', '[/', '<plug>(vimtex-[/)')
+    call s:map('x', '[*', '<plug>(vimtex-[*)')
+    call s:map('o', ']/', '<plug>(vimtex-]/)')
+    call s:map('o', ']*', '<plug>(vimtex-]*)')
+    call s:map('o', '[/', '<plug>(vimtex-[/)')
+    call s:map('o', '[*', '<plug>(vimtex-[*)')
   endif
 
   if get(g:, 'vimtex_text_obj_enabled', 0)

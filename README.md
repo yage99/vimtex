@@ -57,8 +57,9 @@ custom mappings.  All features are enabled by default, but each feature may be
 disabled if desired.
 
 - Document compilation with
-  [latexmk](http://users.phys.psu.edu/~collins/software/latexmk-jcc/) or
-  [latexrun](https://github.com/aclements/latexrun)
+  [latexmk](http://users.phys.psu.edu/~collins/software/latexmk-jcc/),
+  [latexrun](https://github.com/aclements/latexrun), or
+  [arara](https://github.com/cereda/arara)
 - LaTeX log parsing for quickfix entries using
   - internal method
   - [pplatex](https://github.com/stefanhepp/pplatex)
@@ -81,11 +82,16 @@ disabled if desired.
 - Document navigation through
   - table of content
   - table of labels
-  - enhanced `gf` command
+  - proper settings for `'include'`, `'includexpr'`, `'suffixesadd'` and
+    `'define'`, which among other things
+    - allow `:h include-search` and `:h definition-search`
+    - give enhanced `gf` command
 - Easy access to (online) documentation of packages
 - Word count (through `texcount`)
 - Motions
-  - Move between sections with `[[`, `[]`, `][`, `]]`
+  - Move between section boundaries with `[[`, `[]`, `][`, and `]]`
+  - Move between environment boundaries with `[m`, `[M`, `]m`, and `]M`
+  - Move between comment boundaries with `[*` and `]*`
   - Move between matching delimiters with `%`
 - Text objects
   - `ic ac` Commands

@@ -39,7 +39,6 @@ let s:compiler = {
       \ 'output' : tempname(),
       \ 'options' : [
       \   '-verbose',
-      \   '-pdf',
       \   '-file-line-error',
       \   '-synctex=1',
       \   '-interaction=nonstopmode',
@@ -52,6 +51,7 @@ function! s:compiler.init(options) abort dict " {{{1
 
   call self.init_check_requirements()
   call self.init_build_dir_option()
+  call self.init_pdf_mode_option()
 
   call extend(self, deepcopy(s:compiler_{self.backend}))
 
@@ -71,30 +71,52 @@ function! s:compiler.init_build_dir_option() abort dict " {{{1
   "
   " Check if .latexmkrc sets the build_dir - if so this should be respected
   "
+  let l:out_dir = s:parse_latexmkrc_option(self.root, 'out_dir', 0, '')[0]
 
-  let l:pattern = '^\s*\$out_dir\s*=\s*[''"]\(.\+\)[''"]\s*;\?\s*$'
-  let l:files = [
-        \ self.root . '/latexmkrc',
-        \ self.root . '/.latexmkrc',
-        \ fnamemodify('~/.latexmkrc', ':p'),
-        \ expand('$XDG_CONFIG_HOME/latexmk/latexmkrc'),
-        \]
-
-  for l:file in l:files
-    if filereadable(l:file)
-      let l:out_dir = matchlist(readfile(l:file), l:pattern)
-      if len(l:out_dir) > 1
-        if !empty(self.build_dir)
-          call vimtex#log#warning(
-                \ 'Setting out_dir from latexmkrc overrides build_dir!',
-                \ 'Changed build_dir from: ' . self.build_dir,
-                \ 'Changed build_dir to: ' . l:out_dir[1])
-        endif
-        let self.build_dir = l:out_dir[1]
-        return
-      endif
+  if !empty(l:out_dir)
+    if !empty(self.build_dir)
+      call vimtex#log#warning(
+            \ 'Setting out_dir from latexmkrc overrides build_dir!',
+            \ 'Changed build_dir from: ' . self.build_dir,
+            \ 'Changed build_dir to: ' . l:out_dir)
     endif
-  endfor
+    let self.build_dir = l:out_dir
+  endif
+endfunction
+
+" }}}1
+function! s:compiler.init_pdf_mode_option() abort dict " {{{1
+  " If the TeX program directive was not set, and if the pdf_mode is set in
+  " a .latexmkrc file, then deduce the compiler engine from the value of
+  " pdf_mode.
+
+  " Parse the pdf_mode option. If not found, it is set to -1.
+  let [l:pdf_mode, l:is_local] =
+        \ s:parse_latexmkrc_option(self.root, 'pdf_mode', 1, -1)
+
+  " If pdf_mode has a supported value (1: pdflatex, 4: lualatex, 5: xelatex),
+  " override the value of self.tex_program.
+  if l:pdf_mode == 1
+    let l:tex_program = 'pdflatex'
+  elseif l:pdf_mode == 4
+    let l:tex_program = 'lualatex'
+  elseif l:pdf_mode == 5
+    let l:tex_program = 'xelatex'
+  else
+    return
+  endif
+
+  if self.tex_program ==# '_'
+    " The TeX program directive was not specified
+    let self.tex_program = l:tex_program
+  elseif l:is_local && self.tex_program !=# l:tex_program
+    call vimtex#log#warning(
+          \ 'Value of pdf_mode from latexmkrc is inconsistent with ' .
+          \ 'TeX program directive!',
+          \ 'TeX program: ' . self.tex_program,
+          \ 'pdf_mode:    ' . l:tex_program,
+          \ 'The value of pdf_mode will be ignored.')
+  endif
 endfunction
 
 " }}}1
@@ -111,7 +133,7 @@ function! s:compiler.init_check_requirements() abort dict " {{{1
 
   " Check for required executables
   let l:required = [self.executable]
-  if self.continuous && !has('win32')
+  if self.continuous && !(has('win32') || has('win32unix'))
     let l:required += ['pgrep']
   endif
   let l:missing = filter(l:required, '!executable(v:val)')
@@ -142,9 +164,7 @@ function! s:compiler.build_cmd() abort dict " {{{1
     let l:cmd .= ' ' . l:opt
   endfor
 
-  if !empty(self.engine)
-    let l:cmd .= ' ' . self.engine
-  endif
+  let l:cmd .= ' ' . self.get_engine()
 
   if !empty(self.build_dir)
     let l:cmd .= ' -outdir=' . self.build_dir
@@ -189,6 +209,20 @@ function! s:compiler.build_cmd() abort dict " {{{1
 endfunction
 
 " }}}1
+function! s:compiler.get_engine() abort dict " {{{1
+  return get(extend(g:vimtex_compiler_latexmk_engines,
+        \ {
+        \  '_'                : '-pdf',
+        \  'pdflatex'         : '-pdf',
+        \  'lualatex'         : '-lualatex',
+        \  'xelatex'          : '-xelatex',
+        \  'context (pdftex)' : '-pdf -pdflatex=texexec',
+        \  'context (luatex)' : '-pdf -pdflatex=context',
+        \  'context (xetex)'  : '-pdf -pdflatex=''texexec --xtx''',
+        \ }, 'keep'), self.tex_program, '_')
+endfunction
+
+" }}}1
 function! s:compiler.cleanup() abort dict " {{{1
   if self.is_running()
     call self.kill()
@@ -210,6 +244,7 @@ function! s:compiler.pprint_items() abort dict " {{{1
     call add(l:configuration, ['build_dir', self.build_dir])
   endif
   call add(l:configuration, ['latexmk options', self.options])
+  call add(l:configuration, ['latexmk engine', self.get_engine()])
 
   let l:list = []
   call add(l:list, ['backend', self.backend])
@@ -341,7 +376,7 @@ function! s:compiler_process.exec() abort dict " {{{1
   let l:process.cmd = self.build_cmd()
 
   if l:process.continuous
-    if has('win32')
+    if (has('win32') || has('win32unix'))
       " Not implemented
     else
       for l:pid in split(system(
@@ -356,7 +391,7 @@ function! s:compiler_process.exec() abort dict " {{{1
   endif
 
   function! l:process.set_pid() abort dict " {{{2
-    if has('win32')
+    if (has('win32') || has('win32unix'))
       let pidcmd = 'tasklist /fi "imagename eq latexmk.exe"'
       let pidinfo = split(system(pidcmd), '\n')[-1]
       let self.pid = str2nr(split(pidinfo,'\s\+')[1])
@@ -486,6 +521,11 @@ function! s:compiler_nvim.exec() abort dict " {{{1
     let l:shell.on_exit = function('s:callback_nvim_exit')
   endif
 
+  " Initialize output file
+  try
+    call writefile([], self.output)
+  endtry
+
   let self.job = jobstart(l:cmd, l:shell)
 endfunction
 
@@ -532,6 +572,58 @@ endfunction
 function! s:callback_nvim_exit(id, data, event) abort dict " {{{1
   let l:target = self.target !=# b:vimtex.tex ? self.target : ''
   call vimtex#compiler#callback(!vimtex#qf#inquire(l:target))
+endfunction
+
+" }}}1
+
+
+"
+" Utility functions
+"
+
+function! s:parse_latexmkrc_option(root, opt, is_integer, default) abort " {{{1
+  "
+  " Parse option from .latexmkrc.
+  "
+  " Arguments:
+  "   root         Root of LaTeX project
+  "   opt          Name of options
+  "   is_integer   If return type should be integer
+  "   default      Value to return if option not found in latexmkrc file
+  "
+  " Output:
+  "   [value, location]
+  "
+  "   value        Option value (integer or string)
+  "   location     An integer that indicates where option was found
+  "                 -1: not found (default value returned)
+  "                  0: global latexmkrc file
+  "                  1: local latexmkrc file
+  "
+
+  let l:pattern = '^\s*\$' . a:opt . '\s*=\s*'
+        \ . (a:is_integer ? '\(\d\+\)' : '[''"]\(.\+\)[''"]')
+        \ . '\s*;\?\s*\(#.*\)\?$'
+
+  " Candidate files
+  " - each element is a pair [path_to_file, is_local_rc_file].
+  let l:files = [
+        \ [a:root . '/latexmkrc', 1],
+        \ [a:root . '/.latexmkrc', 1],
+        \ [fnamemodify('~/.latexmkrc', ':p'), 0],
+        \ [expand('$XDG_CONFIG_HOME/latexmk/latexmkrc'), 0],
+        \]
+
+  for [l:file, l:is_local] in l:files
+    if filereadable(l:file)
+      let l:match = matchlist(readfile(l:file), l:pattern)
+      if len(l:match) > 1
+        return [l:match[1], l:is_local]
+      end
+    endif
+  endfor
+
+  return [a:default, -1]
 endfunction
 
 " }}}1

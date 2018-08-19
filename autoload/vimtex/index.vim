@@ -45,6 +45,7 @@ endfunction
 " }}}1
 function! s:index.create() abort dict " {{{1
   let l:bufnr = bufnr('')
+  let l:winid = win_getid()
   let l:vimtex = get(b:, 'vimtex', {})
 
   if g:vimtex_index_split_pos ==# 'full'
@@ -58,8 +59,8 @@ function! s:index.create() abort dict " {{{1
           \ 'new' escape(self.name, ' ')
   endif
 
-  let self.prev_winnr = bufwinnr(l:bufnr)
   let self.prev_bufnr = l:bufnr
+  let self.prev_winid = l:winid
   let b:index = self
   let b:vimtex = l:vimtex
 
@@ -104,10 +105,9 @@ endfunction
 " }}}1
 function! s:index.goto() abort dict " {{{1
   if self.is_open()
-    let l:winnr = bufwinnr(bufnr(self.name))
-    let l:prev_winnr = winnr()
-    silent execute l:winnr . 'wincmd w'
-    let b:index.prev_winnr = l:prev_winnr
+    let l:prev_winid = win_getid()
+    silent execute bufwinnr(bufnr(self.name)) . 'wincmd w'
+    let b:index.prev_winid = l:prev_winid
   endif
 endfunction
 
@@ -117,7 +117,9 @@ function! s:index.toggle() abort dict " {{{1
     call self.close()
   else
     call self.open()
-    silent execute self.prev_winnr . 'wincmd w'
+    if has_key(self, 'prev_winid')
+      call win_gotoid(self.prev_winid)
+    endif
   endif
 endfunction
 
@@ -139,7 +141,7 @@ function! s:index.refresh() abort dict " {{{1
 
   call self.position_save()
   setlocal modifiable
-  %delete
+  silent %delete
 
   call self.print_help()
   call self.print_entries()
@@ -158,15 +160,14 @@ function! s:index.activate(close) abort dict "{{{1
   let n = vimtex#pos#get_cursor_line() - 1
   if n < self.help_nlines | return | endif
   let entry = self.entries[n - self.help_nlines]
+  let self.prev_index = n + 1
   let l:vimtex_main = get(b:vimtex, 'tex', '')
 
   " Save index winnr info for later use
   let index_winnr = winnr()
 
   " Return to calling window
-  if self.prev_winnr >= 0
-    silent execute self.prev_winnr . 'wincmd w'
-  endif
+  call win_gotoid(self.prev_winid)
 
   " Get buffer number, add buffer if necessary
   let bnr = bufnr(entry.file)
@@ -209,15 +210,12 @@ function! s:index.activate(close) abort dict "{{{1
   " Ensure folds are opened
   normal! zv
 
-  " We're finished now if the index was wiped
-  if bufnr(self.name) < 0 | return | endif
-
-  " Return to index window
-  execute index_winnr . 'wincmd w'
-
   " Keep or close index window (based on options)
-  if a:close
+  if a:close && g:vimtex_index_split_pos !=# 'full'
     call self.close()
+  else
+    " Return to index window
+    execute index_winnr . 'wincmd w'
   endif
 endfunction
 

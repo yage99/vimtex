@@ -60,6 +60,7 @@ endfunction
 " }}}1
 function! s:bibtex.fix_paths() abort " {{{1
   let l:qflist = getqflist()
+  let l:title = getqflist({'title': 1})
 
   for l:qf in l:qflist
     for l:type in self.types
@@ -68,14 +69,27 @@ function! s:bibtex.fix_paths() abort " {{{1
   endfor
 
   call setqflist(l:qflist, 'r')
+
+  " Set title if supported
+  try
+    call setqflist([], 'r', l:title)
+  catch
+  endtry
 endfunction
 
 " }}}1
 function! s:bibtex.get_db_files() abort " {{{1
   if empty(self.db_files)
-    let self.db_files = map(
+    let l:build_dir = fnamemodify(b:vimtex.ext('log'), ':.:h') . '/'
+    for l:file in map(
           \ filter(readfile(self.file), 'v:val =~# ''Database file #\d:'''),
           \ 'matchstr(v:val, '': \zs.*'')')
+      if filereadable(l:file)
+        call add(self.db_files, l:file)
+      elseif filereadable(l:build_dir . l:file)
+        call add(self.db_files, l:build_dir . l:file)
+      endif
+    endfor
   endif
 
   return self.db_files

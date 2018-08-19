@@ -15,6 +15,7 @@
 "     rank   : cumulative line number,
 "     level  : 2,
 "     type   : [content | label | figure | table | todo],
+"     link   : [0 | 1],
 "   }
 "
 
@@ -32,10 +33,13 @@ function! vimtex#parser#toc#parse(file) abort " {{{1
     endif
   endfor
 
+  call s:level.reset('preamble', l:max_level)
+
+  " No more parsing if there is no content
+  if empty(l:content) | return l:entries | endif
+
   " Prepare included file matcher
   let l:included = s:included.init(l:content[0][0])
-
-  call s:level.reset('preamble', l:max_level)
 
   "
   " Begin parsing LaTeX files
@@ -124,8 +128,7 @@ endfunction
 
 " }}}1
 
-
-function! s:get_entry_general(context) abort dict " {{{1
+function! vimtex#parser#toc#get_entry_general(context) abort dict " {{{1
   return {
         \ 'title'  : self.title,
         \ 'number' : '',
@@ -138,6 +141,7 @@ function! s:get_entry_general(context) abort dict " {{{1
 endfunction
 
 " }}}1
+
 
 " Adds entry for each included file that does not contain other entries
 let s:included = {}
@@ -248,6 +252,7 @@ function! s:matcher_bibinputs.get_entry(context) abort dict " {{{1
         \ 'level'  : 0,
         \ 'rank'   : a:context.lnum_total,
         \ 'type'   : 'content',
+        \ 'link'   : 1,
         \ }
 endfunction
 
@@ -320,19 +325,19 @@ endfunction
 let s:matcher_table_of_contents = {
       \ 'title' : 'Table of contents',
       \ 're' : '\v^\s*\\tableofcontents',
-      \ 'get_entry' : function('s:get_entry_general'),
+      \ 'get_entry' : function('vimtex#parser#toc#get_entry_general'),
       \}
 
 let s:matcher_index = {
       \ 'title' : 'Alphabetical index',
       \ 're' : '\v^\s*\\printindex\[?',
-      \ 'get_entry' : function('s:get_entry_general'),
+      \ 'get_entry' : function('vimtex#parser#toc#get_entry_general'),
       \}
 
 let s:matcher_titlepage = {
       \ 'title' : 'Titlepage',
       \ 're' : '\v^\s*\\begin\{titlepage\}',
-      \ 'get_entry' : function('s:get_entry_general'),
+      \ 'get_entry' : function('vimtex#parser#toc#get_entry_general'),
       \}
 
 let s:matcher_bibliography = {
@@ -341,7 +346,7 @@ let s:matcher_bibliography = {
       \        .  'printbib%(liography|heading)\s*(\{|\[)?'
       \        . '|begin\s*\{\s*thebibliography\s*\}'
       \        . '|bibliography\s*\{)',
-      \ 'get_entry' : function('s:get_entry_general'),
+      \ 'get_entry' : function('vimtex#parser#toc#get_entry_general'),
       \}
 
 let s:matcher_todos = {
@@ -436,7 +441,7 @@ function! s:find_closing(start, string, count, type) abort " {{{1
     let l:re = '\[\|\]'
     let l:open = '['
   endif
-  let l:i2 = a:start
+  let l:i2 = a:start - 1
   let l:count = a:count
   while l:count > 0
     let l:i2 = match(a:string, l:re, l:i2+1)

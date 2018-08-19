@@ -7,12 +7,21 @@
 let g:vimtex#re#not_bslash =  '\v%(\\@<!%(\\\\)*)@<='
 let g:vimtex#re#not_comment = '\v%(' . g:vimtex#re#not_bslash . '\%.*)@<!'
 
+let g:vimtex#re#tex_input_root =
+      \ '^\v\s*\%\s*!?\s*[tT][eE][xX]\s+[rR][oO][oO][tT]\s*\=\s*\zs.*\ze\s*$'
 let g:vimtex#re#tex_input_latex = '\v\\%(input|include|subfile)\s*\{'
 let g:vimtex#re#tex_input_import =
       \ '\v\\%(sub)?%(import|%(input|include)from)\*?\{[^\}]*\}\{'
+
 let g:vimtex#re#tex_input = '\v%(' . join([
       \   g:vimtex#re#tex_input_latex,
       \   g:vimtex#re#tex_input_import,
+      \ ], '|') . ')'
+
+let g:vimtex#re#tex_include = g:vimtex#re#not_comment . '%(' . join([
+      \   g:vimtex#re#tex_input_root,
+      \   g:vimtex#re#tex_input_latex . '\zs[^\}]*\ze\}?',
+      \   g:vimtex#re#tex_input_import . '\zs[^\}]*\ze\}?',
       \ ], '|') . ')'
 
 " {{{1 Completion regexes
@@ -28,7 +37,7 @@ let g:vimtex#re#neocomplete =
       \ . '|\a*(gls|Gls|GLS)(pl)?\a*%(\s*\[[^]]*\]){0,2}\s*\{[^}]*'
       \ . '|includepdf%(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|includestandalone%(\s*\[[^]]*\])?\s*\{[^}]*'
-      \ . '|usepackage%(\s*\[[^]]*\])?\s*\{[^}]*'
+      \ . '|%(usepackage|RequirePackage)%(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|documentclass%(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|begin%(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|end%(\s*\[[^]]*\])?\s*\{[^}]*'
@@ -46,30 +55,43 @@ let g:vimtex#re#deoplete = '\\(?:'
       \ . '|\w*(gls|Gls|GLS)(pl)?\w*(\s*\[[^]]*\]){0,2}\s*\{[^}]*'
       \ . '|includepdf(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|includestandalone(\s*\[[^]]*\])?\s*\{[^}]*'
-      \ . '|usepackage(\s*\[[^]]*\])?\s*\{[^}]*'
+      \ . '|(usepackage|RequirePackage)(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|documentclass(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|begin(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|end(\s*\[[^]]*\])?\s*\{[^}]*'
       \ . '|\w*'
       \ .')'
 
-let g:vimtex#re#ncm = [
-      \ '\\[A-Za-z]*',
-      \ '\\[A-Za-z]*cite[A-Za-z]*(\[[^]]*\]){0,2}{[^}]*',
-      \ '\\(text|block)cquote\*?(\[[^]]*\]){0,2}{[^}]*',
-      \ '\\(for|hy)[A-Za-z]*cquote\*?{[^}]*}(\[[^]]*\]){0,2}{[^}]*',
-      \ '\\[A-Za-z]*ref({[^}]*|range{([^,{}]*(}{)?))',
-      \ '\\hyperref\[[^]]*',
-      \ '\\includegraphics\*?(\[[^]]*\]){0,2}{[^}]*',
-      \ '\\(include(only)?|input|subfile){[^}]*',
-      \ '\\\a*(gls|Gls|GLS)(pl)?\a*(\s*\[[^]]*\]){0,2}\s*\{[^}]*',
-      \ '\\includepdf(\s*\[[^]]*\])?\s*\{[^}]*',
-      \ '\\includestandalone(\s*\[[^]]*\])?\s*\{[^}]*',
-      \ '\\usepackage(\s*\[[^]]*\])?\s*\{[^}]*',
+let g:vimtex#re#ncm2#cmds = [
+      \ '\\[A-Za-z]+',
+      \ '\\(usepackage|RequirePackage)(\s*\[[^]]*\])?\s*\{[^}]*',
       \ '\\documentclass(\s*\[[^]]*\])?\s*\{[^}]*',
       \ '\\begin(\s*\[[^]]*\])?\s*\{[^}]*',
       \ '\\end(\s*\[[^]]*\])?\s*\{[^}]*',
       \]
+let g:vimtex#re#ncm2#bibtex = [
+      \ '\\[A-Za-z]*cite[A-Za-z]*(\[[^]]*\]){0,2}{[^}]*',
+      \ '\\(text|block)cquote\*?(\[[^]]*\]){0,2}{[^}]*',
+      \ '\\(for|hy)[A-Za-z]*cquote\*?{[^}]*}(\[[^]]*\]){0,2}{[^}]*',
+      \]
+let g:vimtex#re#ncm2#labels = [
+      \ '\\[A-Za-z]*ref({[^}]*|range{([^,{}]*(}{)?))',
+      \ '\\hyperref\[[^]]*',
+      \ '\\\a*(gls|Gls|GLS)(pl)?\a*(\s*\[[^]]*\]){0,2}\s*\{[^}]*',
+      \]
+let g:vimtex#re#ncm2#files = [
+      \ '\\includegraphics\*?(\[[^]]*\]){0,2}{[^}]*',
+      \ '\\(include(only)?|input|subfile){[^}]*',
+      \ '\\includepdf(\s*\[[^]]*\])?\s*\{[^}]*',
+      \ '\\includestandalone(\s*\[[^]]*\])?\s*\{[^}]*',
+      \]
+
+let g:vimtex#re#ncm2 = g:vimtex#re#ncm2#cmds +
+            \ g:vimtex#re#ncm2#bibtex +
+            \ g:vimtex#re#ncm2#labels +
+            \ g:vimtex#re#ncm2#files
+
+let g:vimtex#re#ncm = copy(g:vimtex#re#ncm2)
 
 let g:vimtex#re#youcompleteme = map(copy(g:vimtex#re#ncm), "'re!' . v:val")
 

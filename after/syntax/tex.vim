@@ -359,24 +359,26 @@ let b:current_syntax = 'tex'
 " }}}1
 " {{{1 Nested syntax highlighting for asymptote
 
+syntax cluster texDocGroup add=texZoneAsymptote
+
 let s:asypath = globpath(&runtimepath, 'syntax/asy.vim')
 if !empty(s:asypath)
   unlet b:current_syntax
   syntax include @ASYMPTOTE syntax/asy.vim
-  syntax cluster texDocGroup add=texZoneAsymptote
   syntax region texZoneAsymptote
-        \ start='\\begin{asy}'rs=s
-        \ end='\\end{asy}'re=e
+        \ start='\\begin{asy\z(def\)\?}'rs=s
+        \ end='\\end{asy\z1}'re=e
         \ keepend
         \ transparent
-        \ contains=texBeginEnd,texBeginEndModifier,@ASYMPTOTE
-  syntax region texZoneAsymptote
-        \ start='\\begin{asydef}'rs=s
-        \ end='\\end{asydef}'re=e
-        \ keepend
-        \ transparent
-        \ contains=texBeginEnd,texBeginEndModifier,@ASYMPTOTE
+        \ contains=texBeginEnd,@ASYMPTOTE
   let b:current_syntax = 'tex'
+else
+  syntax region texZoneAsymptote
+        \ start='\\begin{asy\z(def\)\?}'rs=s
+        \ end='\\end{asy\z1}'re=e
+        \ keepend
+        \ contains=texBeginEnd
+  highlight def link texZoneAsymptote texZone
 endif
 
 " }}}1
@@ -390,12 +392,28 @@ syntax region texZoneMinted
       \ keepend
       \ contains=texMinted
 
+" Highlight "unknown" statements
+syntax region texMintArgUnknown matchgroup=Delimiter
+      \ start='{'
+      \ end='}'
+      \ contained
+      \ nextgroup=texMintZoneUnknown
+syntax region texMintZoneUnknown matchgroup=Delimiter
+      \ start='\z([|+/]\)'
+      \ end='\z1'
+      \ contained
+syntax region texMintZoneUnknown matchgroup=Delimiter
+      \ start='{'
+      \ end='}'
+      \ contained
+
 " Next add nested syntax support for desired languages
 for s:entry in get(g:, 'vimtex_syntax_minted', [])
   let s:lang = s:entry.lang
   let s:syntax = get(s:entry, 'syntax', s:lang)
 
-  let s:group_name = 'texZoneMinted' . toupper(s:lang[0]) . s:lang[1:]
+  let s:cap_name = toupper(s:lang[0]) . s:lang[1:]
+  let s:group_name = 'texZoneMinted' . s:cap_name
   execute 'syntax cluster texFoldGroup add=' . s:group_name
 
   unlet b:current_syntax
@@ -406,6 +424,28 @@ for s:entry in get(g:, 'vimtex_syntax_minted', [])
           \ 'remove=' . join(s:entry.ignore, ',')
   endif
 
+  " Add statement variants
+  " - \mint[]{lang}|...|
+  " - \mint[]{lang}{...}
+  " - \mintinline[]{lang}|...|
+  " - \mintinline[]{lang}{...}
+  execute 'syntax match texMintArg' . s:cap_name  '''{' . s:lang . '}'''
+        \ 'contained'
+        \ 'nextgroup=texMintZone' . s:cap_name
+  execute 'syntax region texMintZone' . s:cap_name
+        \ 'matchgroup=Delimiter'
+        \ 'start=''\z([|+/]\)'''
+        \ 'end=''\z1'''
+        \ 'contained'
+        \ 'contains=@' . toupper(s:lang)
+  execute 'syntax region texMintZone' . s:cap_name
+        \ 'matchgroup=Delimiter'
+        \ 'start=''{'''
+        \ 'end=''}'''
+        \ 'contained'
+        \ 'contains=@' . toupper(s:lang)
+
+  " Add main minted environment
   execute 'syntax region' s:group_name
         \ 'start="\\begin{minted}\_[^}]\{-}{' . s:lang . '}"rs=s'
         \ 'end="\\end{minted}"re=e'
@@ -413,9 +453,7 @@ for s:entry in get(g:, 'vimtex_syntax_minted', [])
         \ 'transparent'
         \ 'contains=texMinted,@' . toupper(s:lang)
 
-  "
   " Support for custom environment names
-  "
   for s:env in get(s:entry, 'environments', [])
     execute 'syntax region' s:group_name
           \ 'start="\\begin{' . s:env . '}"rs=s'
@@ -435,8 +473,24 @@ for s:entry in get(g:, 'vimtex_syntax_minted', [])
           \ '"\\begin{' . s:env . '\*}\s*{\_.\{-}}"'
           \ 'contains=texBeginEnd,texDelimiter'
   endfor
+
+  " Support for custom commands
+  for s:cmd in sort(get(s:entry, 'commands', []))
+    execute 'syntax match texStatement'
+          \ '''\\' . s:cmd . ''''
+          \ 'nextgroup=texMintZone' . s:cap_name
+  endfor
 endfor
 let b:current_syntax = 'tex'
+
+" Main matcher for the minted statements/commands (must come last to allow
+" nextgroup patterns)
+syntax match texStatement '\\mint\(inline\)\?' nextgroup=texMintOptArg,texMintArg.*
+syntax region texMintOptArg matchgroup=Delimiter
+      \ start='\['
+      \ end='\]'
+      \ contained
+      \ nextgroup=texMintArg.*
 
 syntax match texMinted '\\begin{minted}\_[^}]\{-}{\w\+}'
       \ contains=texBeginEnd,texMintedName
@@ -444,6 +498,7 @@ syntax match texMinted '\\end{minted}'
       \ contains=texBeginEnd
 syntax match texMintedName '{\w\+}' contained
 
+highlight link texMintZoneUnknown texZone
 highlight link texMintedName texBeginEndName
 
 " }}}1
