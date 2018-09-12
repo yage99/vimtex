@@ -18,7 +18,7 @@ function! vimtex#delim#init_buffer() " {{{1
         \ :<c-u>call vimtex#delim#toggle_modifier_visual({'dir': -1})<cr>
 
   nnoremap <silent><buffer> <plug>(vimtex-delim-change-math)
-        \ :call vimtex#delim#change_prompt()<cr>
+        \ :call vimtex#delim#change()<cr>
 
   nnoremap <silent><buffer> <plug>(vimtex-delim-delete)
         \ :call vimtex#delim#delete()<cr>
@@ -197,19 +197,44 @@ endfunction
 
 " }}}1
 
-function! vimtex#delim#change(open, close, new) " {{{1
+function! vimtex#delim#change(...) " {{{1
+  let [l:open, l:close] = vimtex#delim#get_surrounding('delim_math')
+  if empty(l:open) | return | endif
+
+  if a:0 > 0
+    let l:new_delim = a:1
+  else
+    let l:name = get(l:open, 'name', l:open.is_open
+          \ ? l:open.match . ' ... ' . l:open.corr
+          \ : l:open.match . ' ... ' . l:open.corr)
+
+    let l:new_delim = vimtex#echo#input({
+          \ 'info' :
+          \   ['Change surrounding delimiter: ', ['VimtexWarning', l:name]],
+          \ 'complete' : 'customlist,vimtex#delim#change_input_complete',
+          \})
+  endif
+
+  if empty(l:new_delim) | return | endif
+  call vimtex#delim#change_with_args(l:open, l:close, l:new_delim)
+endfunction
+
+" }}}1
+function! vimtex#delim#change_with_args(open, close, new) " {{{1
   "
   " Set target environment
   "
   if a:new ==# ''
     let [l:beg, l:end] = ['', '']
+  elseif index(['{', '}'], a:new) >= 0
+    let [l:beg, l:end] = ['{', '}']
   else
-    let l:side = a:new =~# g:vimtex#delim#re.delim_all.close
-    let l:index = index(map(copy(g:vimtex#delim#lists.delim_all.name),
+    let l:side = a:new =~# g:vimtex#delim#re.delim_math.close
+    let l:index = index(map(copy(g:vimtex#delim#lists.delim_math.name),
           \   'v:val[' . l:side . ']'),
           \ a:new)
     if l:index >= 0
-      let [l:beg, l:end] = g:vimtex#delim#lists.delim_all.name[l:index]
+      let [l:beg, l:end] = g:vimtex#delim#lists.delim_math.name[l:index]
     else
       let [l:beg, l:end] = [a:new, a:new]
     endif
@@ -247,25 +272,6 @@ function! vimtex#delim#change(open, close, new) " {{{1
 endfunction
 
 " }}}1
-function! vimtex#delim#change_prompt() " {{{1
-  let [l:open, l:close] = vimtex#delim#get_surrounding('delim_all')
-  if empty(l:open) | return | endif
-
-  let l:name = get(l:open, 'name', l:open.is_open
-        \ ? l:open.match . ' ... ' . l:open.corr
-        \ : l:open.match . ' ... ' . l:open.corr)
-
-  let l:new_delim = vimtex#echo#input({
-        \ 'info' :
-        \   ['Change surrounding delimiter: ', ['VimtexWarning', l:name]],
-        \ 'complete' : 'customlist,vimtex#delim#change_input_complete',
-        \})
-  if empty(l:new_delim) | return | endif
-
-  call vimtex#delim#change(l:open, l:close, l:new_delim)
-endfunction
-
-" }}}1
 function! vimtex#delim#change_input_complete(lead, cmdline, pos) " {{{1
   let l:all = deepcopy(g:vimtex#delim#lists.delim_all.name)
   let l:open = map(copy(l:all), 'v:val[0]')
@@ -280,7 +286,7 @@ function! vimtex#delim#delete() " {{{1
   let [l:open, l:close] = vimtex#delim#get_surrounding('delim_modq_math')
   if empty(l:open) | return | endif
 
-  call vimtex#delim#change(l:open, l:close, '')
+  call vimtex#delim#change_with_args(l:open, l:close, '')
 endfunction
 
 " }}}1

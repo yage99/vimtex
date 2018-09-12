@@ -26,7 +26,7 @@ endfunction
 
 " }}}1
 
-function! vimtex#cmd#change() " {{{1
+function! vimtex#cmd#change(...) " {{{1
   let l:cmd = vimtex#cmd#get_current()
   if empty(l:cmd) | return | endif
 
@@ -35,9 +35,13 @@ function! vimtex#cmd#change() " {{{1
   let l:cnum = l:cmd.pos_start.cnum
 
   " Get new command name
-  let l:new_name = vimtex#echo#input({
-        \ 'info' : ['Change command: ', ['VimtexWarning', l:old_name]],
-        \})
+  if a:0 > 0
+    let l:new_name = a:1
+  else
+    let l:new_name = vimtex#echo#input({
+          \ 'info' : ['Change command: ', ['VimtexWarning', l:old_name]],
+          \})
+  endif
   let l:new_name = substitute(l:new_name, '^\\', '', '')
   if empty(l:new_name) | return | endif
 
@@ -163,13 +167,18 @@ function! vimtex#cmd#create_ask(visualmode) " {{{1
     let l:pos_start = getpos("'<")
     let l:pos_end = getpos("'>")
 
-    normal! `>a}
-    normal! `<
-    execute 'normal! i\' . l:cmd . '{'
+    if visualmode() ==# ''
+      normal! gvA}
+      execute 'normal! gvI\' . l:cmd . '{'
 
-    let l:pos_end[2] += 1
-    if l:pos_end[1] == l:pos_start[1]
-      let l:pos_end[2] += strlen(l:cmd) + 2
+      let l:pos_end[2] += strlen(l:cmd) + 3
+    else
+      normal! `>a}
+      normal! `<
+      execute 'normal! i\' . l:cmd . '{'
+
+      let l:pos_end[2] +=
+            \ l:pos_end[1] == l:pos_start[1] ? strlen(l:cmd) + 3 : 1
     endif
 
     call vimtex#pos#set_cursor(l:pos_end)

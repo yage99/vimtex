@@ -221,7 +221,7 @@ function! s:get_main() " {{{1
     if l:id >= 0
       return s:vimtex_states[l:id].tex
     else
-      let s:disabled_modules = ['latexmk', 'view', 'toc', 'labels']
+      let s:disabled_modules = ['latexmk', 'view', 'toc']
       return expand('%:p')
     endif
   endif
@@ -339,16 +339,15 @@ function! s:get_main_recurse(...) " {{{1
     let l:tried[l:file] = [l:file]
   endif
 
-  let l:filter_re = g:vimtex#re#tex_input
-        \ . '\s*((.*)\/)?' . fnamemodify(l:file, ':t:r')
-        \ . '%(\.tex)?\s*\}'
+  let l:re_filter = g:vimtex#re#tex_input
+        \ . '\s*\f*' . fnamemodify(l:file, ':t:r')
 
   " Search through candidates found recursively upwards in the directory tree
   for l:cand in s:findfiles_recursive('*.tex', fnamemodify(l:file, ':p:h'))
     if index(l:tried[l:file], l:cand) >= 0 | continue | endif
     call add(l:tried[l:file], l:cand)
 
-    if len(filter(readfile(l:cand), 'v:val =~# l:filter_re')) > 0
+    if len(filter(readfile(l:cand), 'v:val =~# l:re_filter')) > 0
       let l:res = s:get_main_recurse(fnamemodify(l:cand, ':p'), l:tried)
       if !empty(l:res) | return l:res | endif
     endif
@@ -379,7 +378,7 @@ endfunction
 function! s:file_reaches_current(file) " {{{1
   if !filereadable(a:file) | return 0 | endif
 
-  for l:line in readfile(a:file)
+  for l:line in filter(readfile(a:file), 'v:val =~# g:vimtex#re#tex_input')
     let l:file = matchstr(l:line, g:vimtex#re#tex_input . '\zs\f+')
     if empty(l:file) | continue | endif
 
@@ -444,13 +443,13 @@ function! s:vimtex.new(main, preserve_root) abort dict " {{{1
 
   call l:new.parse_tex_program()
   call l:new.parse_documentclass()
+  call l:new.parse_graphicspath()
   call l:new.gather_sources()
 
   call vimtex#view#init_state(l:new)
   call vimtex#compiler#init_state(l:new)
   call vimtex#qf#init_state(l:new)
   call vimtex#toc#init_state(l:new)
-  call vimtex#labels#init_state(l:new)
   call vimtex#fold#init_state(l:new)
 
   " Parsing packages might depend on the compiler setting for build_dir
@@ -504,6 +503,28 @@ function! s:vimtex.parse_documentclass() abort dict " {{{1
       let self.documentclass = l:class
       break
     endif
+  endfor
+endfunction
+
+" }}}1
+function! s:vimtex.parse_graphicspath() abort dict " {{{1
+  " Combine the preamble as one long string of commands
+  let l:preamble = join(map(copy(self.preamble),
+        \ 'substitute(v:val, ''\\\@<!%.*'', '''', '''')'))
+
+  " Extract the graphicspath command from this string
+  let l:graphicspath = matchstr(l:preamble,
+          \ g:vimtex#re#not_bslash
+          \ . '\\graphicspath\s*\{\s*\{\s*\zs.{-}\ze\s*\}\s*\}'
+          \)
+
+  " Add all parsed graphicspaths
+  let self.graphicspath = []
+  for l:path in split(l:graphicspath, '\s*}\s*{\s*')
+    let l:path = substitute(l:path, '\/\s*$', '', '')
+    call add(self.graphicspath, l:path[0] ==# '/'
+          \ ? l:path
+          \ : simplify(self.root . '/' . l:path))
   endfor
 endfunction
 
